@@ -52,7 +52,11 @@
 			// this is class that extends the Workflow class in src/index.ts
 			"class_name": "MyWorkflow"
 		}
-	]
+	],
+	
+	"ai": {
+		"binding": "AI"
+	}
 	// </docs-tag name="workflows-binding-wrangler.json">
 }
 // </docs-tag name="workflows-wrangler.json">
