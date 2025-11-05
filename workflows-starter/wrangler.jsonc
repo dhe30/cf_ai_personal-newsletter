@@ -56,7 +56,13 @@
 	
 	"ai": {
 		"binding": "AI"
-	}
+	},
+	"kv_namespaces": [
+		{
+			"binding": "RESULTS",
+			"id": "be7f666a195c430ab2de4426deb59553"
+		}
+	]
 	// </docs-tag name="workflows-binding-wrangler.json">
 }
 // </docs-tag name="workflows-wrangler.json">

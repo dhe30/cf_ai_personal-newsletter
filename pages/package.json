@@ -11,9 +11,10 @@
 		"deploy": "npm run build && wrangler pages deploy",
 		"cf-typegen": "wrangler types",
 		"dev:workflow": "cd workflows-starter/ && npx wrangler dev --port 8787",
-    	"dev:pages": "npx wrangler pages dev ./dist --service WORKFLOW_SERVICE=workflows-starter@local"
+		"dev:pages": "npx wrangler pages dev ./dist --service WORKFLOW_SERVICE=workflows-starter@local"
 	},
 	"dependencies": {
+		"lucide-react": "^0.552.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1"
 	},

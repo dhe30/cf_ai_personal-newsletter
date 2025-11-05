@@ -1,110 +1,312 @@
-// <docs-tag name="full-workflow-example">
-import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+// <docs-tag name="simple-workflow-example">
+import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep, WorkerEntrypoint } from 'cloudflare:workers';
 
-type Env = {
-	// Add your bindings here, e.g. Workers KV, D1, Workers AI, etc.
+interface Env {
 	MY_WORKFLOW: Workflow;
-};
+	AI: Ai;
+	RESULTS: KVNamespace;
+}
 
-// User-defined params passed to your workflow
-type Params = {
-	email: string;
-	metadata: Record<string, string>;
-};
+interface NewsletterParams {
+	interests: string[];
+	sources: string[];
+}
 
-// <docs-tag name="workflow-entrypoint">
-export class MyWorkflow extends WorkflowEntrypoint<Env, Params> {
-	async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-		// Can access bindings on `this.env`
-		// Can access params on `event.payload`
+interface Article {
+	title: string;
+	url: string;
+	source: string;
+}
 
-		console.info(`starting workflow: ${event.instanceId}`);
-		const files = await step.do('my first step', async () => {
-			// Fetch a list of files from $SOME_SERVICE
-			return {
-				inputParams: event,
-				files: [
-					'doc_7392_rev3.pdf',
-					'report_x29_final.pdf',
-					'memo_2024_05_12.pdf',
-					'file_089_update.pdf',
-					'proj_alpha_v2.pdf',
-					'data_analysis_q2.pdf',
-					'notes_meeting_52.pdf',
-					'summary_fy24_draft.pdf',
-				],
-			};
+interface ScoredArticle extends Article {
+	score: number;
+	reasoning: string;
+}
+
+interface Newsletter {
+	intro: string;
+	articles: {
+		title: string;
+		url: string;
+		summary: string;
+		reason: string;
+		source: string;
+	}[];
+	generatedAt: string;
+}
+
+// Create your own class that implements a Workflow
+export class MyWorkflow extends WorkflowEntrypoint<Env> {
+	// Define a run() method
+	async run(event: WorkflowEvent<NewsletterParams>, step: WorkflowStep) {
+		// Define one or more steps that optionally return state.
+		const { interests, sources } = event.payload;
+
+		const articles = await step.do('scrape-articles', async () => {
+			console.log(`Scraping ${sources.length} sources...`);
+			return await this.scrapeAllSources(sources);
 		});
 
-		// You can optionally have a Workflow wait for additional data:
-		// human approval or an external webhook or HTTP request, before progressing.
-		// You can submit data via HTTP POST to /accounts/{account_id}/workflows/{workflow_name}/instances/{instance_id}/events/{eventName}
-		const waitForApproval = await step.waitForEvent('request-approval', {
-			type: 'approval', // define an optional key to switch on
-			timeout: '1 minute', // keep it short for the example!
+		console.log(`found ${articles.length} articles`);
+
+		const scoredArticles = await step.do('score-articles', async () => {
+			console.log(`Scoring ${articles.length} articles...`);
+			return await this.scoreArticles(articles, interests);
 		});
 
-		const apiResponse = await step.do('some other step', async () => {
-			let resp = await fetch('https://api.cloudflare.com/client/v4/ips');
-			return await resp.json<any>();
+		const topArticles = await step.do('select-top', async () => {
+			const sorted = scoredArticles
+				.filter((a) => a.score >= 6)
+				.sort((a, b) => b.score - a.score)
+				.slice(0, 7);
+
+			console.log(`Selected ${sorted.length} top articles`);
+			return sorted;
 		});
 
-		await step.sleep('wait on something', '1 minute');
+		const newsletter = await step.do('generate-newsletter', async () => {
+			console.log('Generating newsletter...');
+			return await this.generateNewsletter(topArticles, interests);
+		});
 
-		await step.do(
-			'make a call to write that could maybe, just might, fail',
-			// Define a retry strategy
-			{
-				retries: {
-					limit: 5,
-					delay: '5 second',
-					backoff: 'exponential',
+		// Step 5: Store result in KV for retrieval
+		await step.do("store-result", async () => {
+			console.log(`Storing result in KV with key: workflow:${event.instanceId}`);
+			await this.env.RESULTS.put(
+				`workflow:${event.instanceId}`,
+				JSON.stringify(newsletter),
+				{ expirationTtl: 3600 } // Expire after 1 hour
+			);
+		});
+
+		return newsletter;
+	}
+
+	private async scrapeSingleSource(url: string): Promise<Article[]> {
+		try {
+			const response = await fetch(url, {
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (compatible; NewsletterBot/1.0)',
 				},
-				timeout: '15 minutes',
-			},
-			async () => {
-				// Do stuff here, with access to the state from our previous steps
-				if (Math.random() > 0.5) {
-					throw new Error('API call to $STORAGE_SYSTEM failed');
+			});
+
+			if (!response.ok) {
+				console.warn(`Failed to fetch ${url}: ${response.status}`);
+			}
+
+			const html = await response.text();
+
+			const articles: Article[] = [];
+			const articlePattern = /<a[^>]*href=["']([^"']*(?:article|story|post|news)[^"']*)["'][^>]*>([^<]+)<\/a>/gi;
+			let match;
+
+			while ((match = articlePattern.exec(html)) != null && articles.length < 20) {
+				const articleUrl = this.normalizeUrl(match[1], url);
+				const title = this.cleanText(match[2]);
+
+				if (title.length > 20 && !articles.some((a) => a.url === articleUrl)) {
+					articles.push({
+						title,
+						url: articleUrl,
+						source: new URL(url).hostname,
+					});
 				}
-			},
+			}
+
+			const headlinePattern = /<h[123][^>]*>(?:<a[^>]*href=["']([^"']*)["'][^>]*>)?([^<]+)(?:<\/a>)?<\/h[123]>/gi;
+
+			while ((match = headlinePattern.exec(html)) != null && articles.length < 20) {
+				const articleUrl = match[1] ? this.normalizeUrl(match[1], url) : url;
+				const title = this.cleanText(match[2]);
+
+				if (title.length > 20 && !articles.some((a) => a.url === articleUrl || title === a.title)) {
+					articles.push({
+						title,
+						url: articleUrl,
+						source: new URL(url).hostname,
+					});
+				}
+			}
+
+			return articles;
+		} catch (error) {
+			console.error(`Error scraping ${url}:`, error);
+			return [];
+		}
+	}
+
+	private async scrapeAllSources(sources: string[]): Promise<Article[]> {
+		const results = await Promise.all(sources.map((source) => this.scrapeSingleSource(source)));
+		return results.flat();
+	}
+
+	private async scoreArticles(articles: Article[], interests: string[]): Promise<ScoredArticle[]> {
+		const scored: ScoredArticle[] = [];
+
+		const batchSize = 5;
+		for (let i = 0; i < articles.length; i += batchSize) {
+			const batch = articles.slice(i, i + batchSize);
+
+			const batchPromises = batch.map(async (article) => {
+				try {
+					const prompt = `You are evaluating article relevance for a personalized newsletter.
+
+User Interests: ${interests.join(', ')}
+
+Article:
+Title: ${article.title}
+Source: ${article.source}
+
+Rate this article's relevance to the user's interests on a scale of 1-10, where:
+- 10 = Extremely relevant, must-read for this user
+- 7-9 = Highly relevant
+- 4-6 = Somewhat relevant
+- 1-3 = Not relevant
+
+Respond ONLY with valid JSON in this exact format:
+{"score": 8, "reasoning": "Brief explanation of why this matters to the user"}`;
+
+					const response = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-awq', {
+						messages: [
+							{ role: 'system', content: 'You are a helpful assistant that rates article relevance. Always respond with valid JSON only.' },
+							{ role: 'user', content: prompt },
+						],
+						max_tokens: 150,
+					});
+
+					const text = response.response || '';
+					const jsonMatch = text.match(/\{[^}]+\}/);
+
+					if (jsonMatch) {
+						const parsed = JSON.parse(jsonMatch[0]);
+						return {
+							...article,
+							score: parsed.score || 5,
+							reasoning: parsed.reasoning || 'Relevant to your interests',
+						};
+					}
+
+					return {
+						...article,
+						score: 5,
+						reasoning: 'Could not determine relevance',
+					};
+				} catch (error) {
+					console.error(`Error scoring article "${article.title}":`, error);
+					return {
+						...article,
+						score: 5,
+						reasoning: 'Scoring failed',
+					};
+				}
+			});
+
+			const batchResults = await Promise.all(batchPromises);
+			scored.push(...batchResults);
+		}
+		return scored;
+	}
+
+	private async generateNewsletter(articles: ScoredArticle[], interests: string[]): Promise<Newsletter> {
+		const intoPrompt = `Create a brief, friendly intro (2-3 sentences) for a personalized newsletter about ${interests.join(', ')}. 
+Make it engaging and conversational. Don't use the word "curated".`;
+		const introResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+			messages: [{ role: 'user', content: intoPrompt }],
+			max_tokens: 100,
+		});
+
+		const intro = introResponse.response || "Here are your personalized articles this week."
+
+		const summaries = await Promise.all(
+			articles.map(async (article) => {
+				try {
+					const summaryPrompt = `Summarize this article in 2-3 sentences for someone interested in ${interests.join(', ')}:
+
+Title: ${article.title}
+Source: ${article.source}
+
+Make it engaging and explain why it matters.`;
+					const summaryResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+						messages: [{ role: 'user', content: summaryPrompt }],
+						max_tokens: 150,
+					});
+
+					return {
+						title: article.title,
+						url: article.url,
+						summary: (summaryResponse.response || article.title).trim(),
+						reason: article.reasoning,
+						source: article.source
+					};
+				} catch (error) {
+					console.error(`Failed summary generation for ${article.title}`, error)
+					return {
+						title: article.title,
+						url: article.url,
+						summary: article.title,
+						reason: article.reasoning,
+						source: article.source
+					};
+				}
+			})
 		);
+
+		return {
+			intro,
+			articles: summaries,
+			generatedAt: new Date().toISOString()
+		}
+	}
+
+	private normalizeUrl(url: string, baseUrl: string): string {
+		try {
+			return new URL(url, baseUrl).href;
+		} catch {
+			return url;
+		}
+	}
+	private cleanText(text: string): string {
+		return text
+			.replace(/<[^>]*>/g, '') // Remove HTML tags
+			.replace(/&nbsp;/g, ' ')
+			.replace(/&amp;/g, '&')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/\s+/g, ' ')
+			.trim();
 	}
 }
-// </docs-tag name="workflow-entrypoint">
+// </docs-tag name="simple-workflow-example">
 
-// <docs-tag name="workflows-fetch-handler">
-export default {
-	async fetch(req: Request, env: Env): Promise<Response> {
-		let url = new URL(req.url);
+export default class WorkflowsService extends WorkerEntrypoint<Env> {
+	async fetch() {
+		return new Response("Newsletter Workflow Service", {status: 200})
+	}
+	async createInstance(payload: any) {
+		let instance = await this.env.MY_WORKFLOW.create({ params: payload });
+		return { id: instance.id, status: "running" };
+	}
 
-		if (url.pathname.startsWith('/favicon')) {
-			return Response.json({}, { status: 404 });
-		}
-
-		// Get the status of an existing instance, if provided
-		// GET /?instanceId=<id here>
-		let id = url.searchParams.get('instanceId');
-		if (id) {
-			let instance = await env.MY_WORKFLOW.get(id);
-			return Response.json({
-				status: await instance.status(),
-			});
-		}
-
-		// Spawn a new instance and return the ID and status
-		let instance = await env.MY_WORKFLOW.create();
-		// You can also set the ID to match an ID in your own system
-		// and pass an optional payload to the Workflow
-		// let instance = await env.MY_WORKFLOW.create({
-		// 	id: 'id-from-your-system',
-		// 	params: { payload: 'to send' },
-		// });
-		return Response.json({
+	async getInstance(id: string) {
+		const instance = await this.env.MY_WORKFLOW.get(id)
+		const status = await instance.status()
+		return {
 			id: instance.id,
-			details: await instance.status(),
-		});
-	},
-};
-// </docs-tag name="workflows-fetch-handler">
-// </docs-tag name="full-workflow-example">
+			status: status.status
+		}
+	}
+
+	async getResult(id: string) {
+		const instance = await this.env.MY_WORKFLOW.get(id)
+		const status = await instance.status()
+		if (status.status !== 'complete') {
+			throw new Error(`Workflow ${id} is not complete. Status: ${String(status.status)}`)
+		}
+		const result = await this.env.RESULTS.get(`workflow:${instance.id}`, 'json')
+		if (!result) {
+          throw new Error('Workflow completed but result not found in storage');
+        }
+		return result
+	}
+}
