@@ -22,6 +22,7 @@ const NewsletterGenerator = () => {
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string>('');
+  const [sent, setSent] = useState(false);
 
   // Add interest tag
   const addInterest = () => {
@@ -126,6 +127,8 @@ const NewsletterGenerator = () => {
       if (!response.ok) {
         throw new Error('Failed to send email');
       }
+
+      setSent(true)
     } catch (err) {
       console.log(err)
     }
@@ -284,7 +287,7 @@ const NewsletterGenerator = () => {
         {newsletter && (
           <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 animate-fade-in">
             <div className="flex items-center justify-between gap-3 mb-6">
-              <div className='flex items-center justify-between mb-6'>
+              <div className='flex items-center gap-3 mb-6'>
                 <TrendingUp className="w-6 h-6 text-green-600" />
                 <h2 className="text-2xl font-bold text-gray-900">Your Personalized Newsletter</h2>
               </div>
@@ -298,9 +301,10 @@ const NewsletterGenerator = () => {
                 />
                 <button
                   onClick={sendEmail}
+                  disabled={sent}
                   className="px-6 py-2 !bg-green-600 text-white rounded-lg !hover:bg-green-700"
                 >
-                  Email Me This
+                  {sent ? "Sent!" : "Email Me This"}
                 </button>
               </div>
             </div>
