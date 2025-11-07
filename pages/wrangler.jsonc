@@ -24,7 +24,14 @@
 			"binding": "RESULTS",
 			"id": "be7f666a195c430ab2de4426deb59553"
 		}
-	]
+	],
+	// "secrets_store_secrets": [
+	// 	{
+	// 	"binding": "RESEND_API_KEY",
+	// 	"store_id": "45ed0ce85da340059ee123c3d31c76cc",
+	// 	"secret_name": "RESEND_API_KEY"
+	// 	}
+	// ]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

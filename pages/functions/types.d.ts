@@ -4,6 +4,7 @@
 declare namespace Cloudflare {
 	interface Env {
 		WORKFLOW_SERVICE: Fetcher /* workflows-starter */;
+        // RESEND_API_KEY: SecretsStoreSecret;
 		AI: Ai;
 	}
 }

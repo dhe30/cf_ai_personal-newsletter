@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Sparkles, Plus, X, Mail, Loader, ExternalLink, TrendingUp } from 'lucide-react';
-
+import "./App.css"
 interface Newsletter {
 	intro: string;
 	articles: {
@@ -21,6 +21,7 @@ const NewsletterGenerator = () => {
   const [loading, setLoading] = useState(false);
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState<string>('');
 
   // Add interest tag
   const addInterest = () => {
@@ -109,6 +110,27 @@ const NewsletterGenerator = () => {
     }
   };
 
+  async function sendEmail() {
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          newsletter
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to send email');
+      }
+    } catch (err) {
+      console.log(err)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
@@ -121,7 +143,7 @@ const NewsletterGenerator = () => {
             </h1>
           </div>
           <p className="text-gray-600 text-lg">
-            Get personalized, AI-curated articles from your favorite sources
+            Let AI handpick the best, most relevant articles from your favorite sources - in a weekly newsletter!
           </p>
         </div>
 
@@ -147,7 +169,7 @@ const NewsletterGenerator = () => {
               />
               <button
                 onClick={addInterest}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 !bg-indigo-600 text-white rounded-lg !hover:bg-indigo-700 transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add
@@ -164,9 +186,9 @@ const NewsletterGenerator = () => {
                     {interest}
                     <button
                       onClick={() => removeInterest(interest)}
-                      className="hover:text-indigo-600"
+                      className="!hover:text-indigo-600  !bg-indigo-100"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4 p-0 bg-indigo-100" />
                     </button>
                   </span>
                 ))}
@@ -194,7 +216,7 @@ const NewsletterGenerator = () => {
               />
               <button
                 onClick={addSource}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 !bg-indigo-600 text-white rounded-lg !hover:bg-indigo-700 transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add
@@ -261,19 +283,36 @@ const NewsletterGenerator = () => {
         {/* Newsletter Preview */}
         {newsletter && (
           <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 animate-fade-in">
-            <div className="flex items-center gap-3 mb-6">
-              <TrendingUp className="w-6 h-6 text-green-600" />
-              <h2 className="text-2xl font-bold text-gray-900">Your Personalized Newsletter</h2>
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className='flex items-center justify-between mb-6'>
+                <TrendingUp className="w-6 h-6 text-green-600" />
+                <h2 className="text-2xl font-bold text-gray-900">Your Personalized Newsletter</h2>
+              </div>
+              <div className="mb-4">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 mr-2"
+                />
+                <button
+                  onClick={sendEmail}
+                  className="px-6 py-2 !bg-green-600 text-white rounded-lg !hover:bg-green-700"
+                >
+                  Email Me This
+                </button>
+              </div>
             </div>
 
             {/* Intro */}
             <div className="mb-8 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
-              <p className="text-gray-800 leading-relaxed">{newsletter.intro}</p>
+              <p className="text-gray-800 leading-relaxed">{newsletter?.intro}</p>
             </div>
 
             {/* Articles */}
             <div className="space-y-6">
-              {newsletter.articles.map((article, index) => (
+              {newsletter?.articles.map((article, index) => (
                 <div
                   key={index}
                   className="border-l-4 border-indigo-500 pl-4 pb-6 border-b border-gray-100 last:border-b-0"
@@ -309,7 +348,7 @@ const NewsletterGenerator = () => {
 
             {/* Timestamp */}
             <div className="mt-6 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
-              Generated on {new Date(newsletter.generatedAt).toLocaleString()}
+              Generated on {new Date(newsletter?.generatedAt || '').toLocaleString()}
             </div>
           </div>
         )}

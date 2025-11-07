@@ -64,6 +64,8 @@ export class MyWorkflow extends WorkflowEntrypoint<Env> {
 			return sorted;
 		});
 
+		// console.log(topArticles);
+
 		const newsletter = await step.do('generate-newsletter', async () => {
 			console.log('Generating newsletter...');
 			return await this.generateNewsletter(topArticles, interests);
@@ -104,7 +106,7 @@ export class MyWorkflow extends WorkflowEntrypoint<Env> {
 				const articleUrl = this.normalizeUrl(match[1], url);
 				const title = this.cleanText(match[2]);
 
-				if (title.length > 20 && !articles.some((a) => a.url === articleUrl)) {
+				if (title.length > 20 && !articles.some((a) => a.url === articleUrl) && articleUrl !== url) {
 					articles.push({
 						title,
 						url: articleUrl,
@@ -119,7 +121,7 @@ export class MyWorkflow extends WorkflowEntrypoint<Env> {
 				const articleUrl = match[1] ? this.normalizeUrl(match[1], url) : url;
 				const title = this.cleanText(match[2]);
 
-				if (title.length > 20 && !articles.some((a) => a.url === articleUrl || title === a.title)) {
+				if (title.length > 20 && !articles.some((a) => a.url === articleUrl || title === a.title) && articleUrl !== url) {
 					articles.push({
 						title,
 						url: articleUrl,
@@ -195,7 +197,7 @@ Respond ONLY with valid JSON in this exact format:
 					console.error(`Error scoring article "${article.title}":`, error);
 					return {
 						...article,
-						score: 5,
+						score: 0,
 						reasoning: 'Scoring failed',
 					};
 				}
@@ -209,7 +211,7 @@ Respond ONLY with valid JSON in this exact format:
 
 	private async generateNewsletter(articles: ScoredArticle[], interests: string[]): Promise<Newsletter> {
 		const intoPrompt = `Create a brief, friendly intro (2-3 sentences) for a personalized newsletter about ${interests.join(', ')}. 
-Make it engaging and conversational. Don't use the word "curated".`;
+Make it engaging and conversational. Don't use the word "curated". Please only respond with the intro.`;
 		const introResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
 			messages: [{ role: 'user', content: intoPrompt }],
 			max_tokens: 100,
@@ -225,7 +227,7 @@ Make it engaging and conversational. Don't use the word "curated".`;
 Title: ${article.title}
 Source: ${article.source}
 
-Make it engaging and explain why it matters.`;
+Make it engaging and explain why it matters. Please only respond with the summary.`;
 					const summaryResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
 						messages: [{ role: 'user', content: summaryPrompt }],
 						max_tokens: 150,

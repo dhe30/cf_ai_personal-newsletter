@@ -14,9 +14,12 @@
 		"dev:pages": "npx wrangler pages dev ./dist --service WORKFLOW_SERVICE=workflows-starter@local"
 	},
 	"dependencies": {
+		"@tailwindcss/vite": "^4.1.16",
 		"lucide-react": "^0.552.0",
 		"react": "^19.1.1",
-		"react-dom": "^19.1.1"
+		"react-dom": "^19.1.1",
+		"resend": "^6.4.1",
+		"tailwindcss": "^4.1.16"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251014.0",
