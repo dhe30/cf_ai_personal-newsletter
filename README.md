@@ -1,15 +1,24 @@
-# AI Newsletter Generator
+# AI Newsletter Curator [[deployed demo](https://personal-newsletter.pages.dev/)]
 
-An intelligent newsletter curation system that uses AI to analyze and summarize articles from your favorite news sources based on your interests.
+An intelligent newsletter curation system that uses AI to gather the most relevant articles from your favorite news sources based on your interests.
 
 ## Features
 
+- **Multi-Source Aggregation**: Scrape and collect articles from provided sources
 - **Personalized Curation**: AI analyzes articles based on your specific interests
-- **Multi-Source Aggregation**: Scrape and collect articles from multiple news websites
-- **AI Summaries**: Get concise, personalized summaries of each article
+- **Newsletter Generation**: Gather most relevant articles in a newsletter format, with summaries
 - **Relevance Scoring**: Articles are ranked by how relevant they are to your interests
 
-## 🏗️ Architecture
+## Next Steps
+
+- [ ] Scheduled weekly newsletter generation with Cron Triggers
+- [ ] User authentication and profiles
+- [ ] Save preferences (interests/sources) in database
+- [ ] RSS feed support for easier source management
+- [ ] Web search integration for trending topics
+- [ ] Chat interface for interest discovery
+
+## Architecture
 
 This application is built on Cloudflare's edge platform:
 
@@ -22,6 +31,7 @@ This application is built on Cloudflare's edge platform:
 ### Project Structure
 
 ```
+pages/
 ├── functions/                  # Pages Functions (API endpoints)
 │   └── api/
 │       ├── generate.ts        # Main newsletter generation endpoint
@@ -34,36 +44,36 @@ This application is built on Cloudflare's edge platform:
 └── .dev.vars                  # Local environment variables (not committed)
 ```
 ```
-├── newsletter-workflow/       # Cloudflare Worker
-│   ├── src/   
-│   │    └── index.ts/         # Workflow logic
-│   └── wrangler.jsonc         # Worker configuration
-│       
+workflows-starter/              # Cloudflare Worker
+├── src/       
+│   └── index.ts                # Workflow logic
+└── wrangler.jsonc              # Worker configuration     
 ```
-## 📋 Prerequisites
+## Prerequisites
 
 - Node.js 18+
 - npm or yarn
 - Cloudflare account
 - Wrangler CLI: `npm install -g wrangler`
 
-## 🛠️ Setup
+## Setup
 
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd <your-repo-name>
-npm install
+git clone git@github.com:dhe30/cf_ai_personal-newsletter.git
+cd cf_ai_personal-newsletter
 ```
 
-### 2. Create KV Namespace
+### 2. Initialize Workflows-starter and Create KV Namespace
 
 ```bash
+cd ./workflows-starter
+npm install
 npx wrangler kv namespace create RESULTS
 ```
 
-Copy the namespace ID and update `workers/newsletter-workflow/wrangler.jsonc`:
+Copy the namespace ID and update `workflows-starter/wrangler.jsonc`:
 
 ```jsonc
 {
@@ -76,16 +86,20 @@ Copy the namespace ID and update `workers/newsletter-workflow/wrangler.jsonc`:
 }
 ```
 
-### 3. Set Up Environment Variables
+### 3. Initialize Pages and Set Up Environment Variables
 
-Create a `.dev.vars` file in the root directory:
+Create a `.dev.vars` file in the pages directory:
 
+```bash
+cd ./pages
+npm install
+```
 ```bash
 # .dev.vars (for local development)
 RESEND_API_KEY=re_your_resend_api_key_here
 ```
 
-**Important**: Add `.dev.vars` to `.gitignore` to avoid committing secrets!
+**Important**: Make sure `.dev.vars` is included in `.gitignore` to avoid committing secrets!
 
 ### 4. Configure Production Secrets
 
@@ -99,14 +113,13 @@ npx wrangler secret put RESEND_API_KEY --name personal-newsletter
 ### 5. Deploy the Workflow Worker
 
 ```bash
-cd workers/newsletter-workflow
+cd ../workerflow-starer
 npx wrangler deploy
-cd ../..
 ```
 
 ### 6. Update Pages Configuration
 
-Ensure `wrangler.jsonc` in the root has the correct service binding:
+Ensure `wrangler.jsonc` in pages has the correct service binding:
 
 ```jsonc
 {
@@ -119,11 +132,12 @@ Ensure `wrangler.jsonc` in the root has the correct service binding:
 }
 ```
 
-## 🚀 Development
+## Development
 
 ### Run Frontend Dev Server
 
 ```bash
+cd ../pages
 npm run dev
 # Runs on http://localhost:5173 (or your configured port)
 ```
@@ -133,7 +147,7 @@ npm run dev
 In a separate terminal:
 
 ```bash
-cd workers/newsletter-workflow
+cd ../workflows-starter
 npx wrangler dev --port 8787
 ```
 
@@ -142,58 +156,26 @@ npx wrangler dev --port 8787
 In another terminal:
 
 ```bash
-npx wrangler pages dev ./dist --proxy=5173 --service WORKFLOW_SERVICE=newsletter-workflow-worker@local
+cd ../pages
+npx wrangler pages dev ./dist --proxy=5173 --service WORKFLOW_SERVICE=newsletter-workflow-worker
 ```
 
-The `@local` suffix connects to your locally running workflow worker.
+## Deployment
 
-### Full Local Development
-
-For convenience, you can run all services with a script. Add to `package.json`:
-
-```json
-{
-  "scripts": {
-    "dev": "vite",
-    "dev:workflow": "cd workers/newsletter-workflow && npx wrangler dev --port 8787",
-    "dev:pages": "npx wrangler pages dev ./dist --proxy=5173 --service WORKFLOW_SERVICE=newsletter-workflow-worker@local",
-    "build": "vite build",
-    "deploy:workflow": "cd workers/newsletter-workflow && npx wrangler deploy",
-    "deploy:pages": "npm run build && npx wrangler pages deploy ./dist",
-    "deploy": "npm run deploy:workflow && npm run deploy:pages"
-  }
-}
-```
-
-Then run in separate terminals:
-```bash
-npm run dev            # Terminal 1: Frontend
-npm run dev:workflow   # Terminal 2: Workflow worker
-npm run dev:pages      # Terminal 3: Pages functions
-```
-
-## 📦 Deployment
-
-### Deploy Workflow Worker
+### Deploy Workflow Worker in ./workflows-starter
 
 ```bash
-npm run deploy:workflow
+npx wrangler deploy
 ```
 
-### Build and Deploy Pages
+### Build and Deploy Pages in ./pages
 
 ```bash
 npm run build
-npm run deploy:pages
+npx wrangler pages deploy ./dist
 ```
 
-Or deploy both:
-
-```bash
-npm run deploy
-```
-
-## 🔧 Configuration
+## Configuration
 
 ### Workflow Worker (`workers/newsletter-workflow/wrangler.jsonc`)
 
@@ -213,11 +195,11 @@ npm run deploy
   ],
   "workflows": [
     {
-      "name": "newsletter-workflow",
-      "binding": "NEWSLETTER_WORKFLOW",
-      "class_name": "NewsletterWorkflow"
-    }
-  ]
+      "name": "workflows-starter",
+      "binding": "MY_WORKFLOW",
+      "class_name": "MyWorkflow"
+	}
+  ],
 }
 ```
 
@@ -237,7 +219,7 @@ npm run deploy
 }
 ```
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### `POST /api/generate`
 
@@ -271,7 +253,7 @@ Generate a personalized newsletter.
 }
 ```
 
-**Processing Time**: ~30-60 seconds
+**Processing Time**: ~15 seconds
 
 ### `POST /api/send-email` (Optional)
 
@@ -285,31 +267,7 @@ Send generated newsletter via email.
 }
 ```
 
-## 🧪 Testing
-
-### Test the Workflow Locally
-
-```bash
-curl -X POST http://localhost:8788/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "interests": ["AI", "technology"],
-    "sources": ["https://techcrunch.com"]
-  }'
-```
-
-### Test in Production
-
-```bash
-curl -X POST https://your-app.pages.dev/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "interests": ["AI"],
-    "sources": ["https://techcrunch.com"]
-  }'
-```
-
-## 🎯 How It Works
+## Cloudlfare Workflow Logic
 
 1. **User Input**: User provides interests and news source URLs
 2. **Workflow Triggered**: Pages Function calls the Workflow Worker
@@ -320,19 +278,7 @@ curl -X POST https://your-app.pages.dev/api/generate \
 7. **Result Storage**: Newsletter is stored in KV for retrieval
 8. **Response**: Newsletter is returned to the user
 
-## 🐛 Troubleshooting
-
-### "RESEND_API_KEY not found"
-
-- Ensure `.dev.vars` exists in root directory
-- Check for conflicting secrets store bindings in `wrangler.jsonc`
-- Verify the variable is set correctly: `RESEND_API_KEY=re_...`
-
-### "Workflow Service not found"
-
-- Deploy the workflow worker first: `npm run deploy:workflow`
-- For local dev, ensure worker is running: `npm run dev:workflow`
-- Check service binding name matches in both configs
+## Troubleshooting
 
 ### "Workflow timeout"
 
@@ -346,43 +292,8 @@ curl -X POST https://your-app.pages.dev/api/generate \
 - Try different news sources
 - Check console logs for scraping errors
 
-## 📝 Environment Variables
+## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `RESEND_API_KEY` | API key for Resend email service | Optional (only for email feature) |
-
-## 🔐 Security Notes
-
-- Never commit `.dev.vars` to git
-- Use Cloudflare Dashboard for production secrets
-- API keys should be set as secrets, not plain variables
-- Consider rate limiting the API endpoint in production
-
-## 🚧 Future Enhancements
-
-- [ ] User authentication and profiles
-- [ ] Save preferences (interests/sources) in database
-- [ ] Scheduled weekly newsletter generation with Cron Triggers
-- [ ] RSS feed support for easier source management
-- [ ] Web search integration for trending topics
-- [ ] Chat interface for interest discovery
-- [ ] Email templates with better design
-- [ ] Article deduplication
-- [ ] Reading history tracking
-
-## 📄 License
-
-[Your License Here]
-
-## 🤝 Contributing
-
-Contributions welcome! Please open an issue or PR.
-
-## 📧 Contact
-
-[Your Contact Info]
-
----
-
-Built with ❤️ using Cloudflare Workers, Workers AI, and React
